@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 geng.git = "https://github.com/geng-engine/geng"
+geng-egui.git = "https://github.com/geng-engine/geng-egui"
 serde = "1"

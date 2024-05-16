@@ -1,6 +1,9 @@
+use std::path::Path;
+
 use geng::prelude::itertools::Itertools;
 
 use super::*;
+use geng_egui::*;
 
 #[derive(ugli::Vertex, Clone, Copy)]
 pub struct Vertex {
@@ -78,38 +81,19 @@ struct Shaders {
     wireframe: ugli::Program,
 }
 
-struct Viewer {
-    geng: Geng,
-    shaders: Shaders,
-    options: ViewerOptions,
-    white_texture: ugli::Texture,
-    config: Config,
-    framebuffer_size: vec2<f32>,
-    camera: Camera,
-    sprite: sprite_shape::ThickSprite<Vertex>,
+struct Sprite {
     wireframe_geometry: ugli::VertexBuffer<Vertex>,
-    drag: Option<vec2<f64>>,
-    transition: Option<geng::state::Transition>,
+    shape: sprite_shape::ThickSprite<Vertex>,
 }
 
-impl Viewer {
-    async fn new(geng: &Geng, sprite: sprite_shape::ThickSprite<Vertex>) -> Self {
-        let config: Config = file::load_detect(run_dir().join("assets").join("config.toml"))
-            .await
-            .unwrap();
-        let shaders: Shaders = geng
-            .asset_manager()
-            .load(run_dir().join("assets").join("shaders"))
-            .await
-            .unwrap();
+impl Sprite {
+    async fn new(geng: &Geng, path: impl AsRef<Path>, options: &sprite_shape::Options) -> Self {
+        let shape: sprite_shape::ThickSprite<Vertex> =
+            geng.asset_manager().load_with(path, options).await.unwrap();
         Self {
-            geng: geng.clone(),
-            framebuffer_size: vec2::splat(1.0),
-            shaders,
-            white_texture: ugli::Texture::new_with(geng.ugli(), vec2::splat(1), |_| Rgba::WHITE),
             wireframe_geometry: ugli::VertexBuffer::new_static(
                 geng.ugli(),
-                sprite
+                shape
                     .mesh
                     .chunks(3)
                     .flat_map(|face| {
@@ -120,7 +104,51 @@ impl Viewer {
                     .cloned()
                     .collect(),
             ),
-            sprite,
+            shape,
+        }
+    }
+}
+
+pub struct Viewer {
+    geng: Geng,
+    shaders: Shaders,
+    options: ViewerOptions,
+    white_texture: ugli::Texture,
+    config: Config,
+    framebuffer_size: vec2<f32>,
+    camera: Camera,
+    sprite_options: sprite_shape::Options,
+    path: PathBuf,
+    sprite: Sprite,
+    drag: Option<vec2<f64>>,
+    should_quit: bool,
+    egui: EguiGeng,
+    should_reload: bool,
+}
+
+impl Viewer {
+    pub async fn new(
+        geng: &Geng,
+        path: impl AsRef<Path>,
+        sprite_options: sprite_shape::Options,
+    ) -> Self {
+        let config: Config = file::load_detect(run_dir().join("assets").join("config.toml"))
+            .await
+            .unwrap();
+        let shaders: Shaders = geng
+            .asset_manager()
+            .load(run_dir().join("assets").join("shaders"))
+            .await
+            .unwrap();
+        Self {
+            egui: EguiGeng::new(geng),
+            geng: geng.clone(),
+            framebuffer_size: vec2::splat(1.0),
+            shaders,
+            white_texture: ugli::Texture::new_with(geng.ugli(), vec2::splat(1), |_| Rgba::WHITE),
+            sprite: Sprite::new(geng, path.as_ref(), &sprite_options).await,
+            path: path.as_ref().to_owned(),
+            sprite_options,
             camera: Camera {
                 fov: Angle::from_degrees(config.camera.fov),
                 rotation: Angle::from_degrees(config.camera.rotation),
@@ -130,11 +158,15 @@ impl Viewer {
             drag: None,
             config,
             options: default(),
-            transition: None,
+            should_quit: false,
+            should_reload: false,
         }
     }
 
     fn start_drag(&mut self, pos: vec2<f64>) {
+        if self.egui.get_context().is_pointer_over_area() {
+            return;
+        }
         self.drag = Some(pos);
     }
 
@@ -155,9 +187,71 @@ impl Viewer {
     fn stop_drag(&mut self) {
         self.drag = None;
     }
-}
 
-impl geng::State for Viewer {
+    fn ui(&mut self) {
+        egui::Window::new("SpriteShape").show(self.egui.get_context(), |ui| {
+            ui.heading("viewer options");
+            ui.checkbox(&mut self.options.wireframe, "wireframe");
+            ui.checkbox(&mut self.options.culling, "culling");
+
+            ui.heading("sprite options");
+            ui.horizontal(|ui| {
+                ui.label("Your name: ");
+                // ui.text_edit_singleline(&mut self.name);
+            });
+            if ui
+                .add(egui::Checkbox::new(
+                    &mut self.sprite_options.front_face,
+                    "front face",
+                ))
+                .clicked()
+            {
+                self.should_reload = true;
+            }
+            if ui
+                .add(egui::Checkbox::new(
+                    &mut self.sprite_options.back_face,
+                    "back face",
+                ))
+                .clicked()
+            {
+                self.should_reload = true;
+            }
+            if ui
+                .add(egui::Slider::new(&mut self.sprite_options.iso, 0.0..=1.0).text("iso"))
+                .drag_released()
+            {
+                self.should_reload = true;
+            }
+            if ui
+                .add(
+                    egui::Slider::new(&mut self.sprite_options.cell_size, 1..=100)
+                        .text("cell_size"),
+                )
+                .drag_released()
+            {
+                self.should_reload = true;
+            }
+            if ui
+                .add(
+                    egui::Slider::new(&mut self.sprite_options.thickness, 0.0..=1.0)
+                        .text("thickness"),
+                )
+                .drag_released()
+            {
+                self.should_reload = true;
+            }
+            // if ui.button("Click each year").clicked() {
+            //     self.age += 1;
+            // }
+            // ui.label(format!("Hello '{}', age {}", self.name, self.age));
+        });
+    }
+    fn update(&mut self, _delta_time: time::Duration) {
+        self.egui.begin_frame();
+        self.ui();
+        self.egui.end_frame();
+    }
     fn draw(&mut self, framebuffer: &mut ugli::Framebuffer) {
         self.framebuffer_size = framebuffer.size().map(|x| x as f32);
         ugli::clear(
@@ -171,7 +265,7 @@ impl geng::State for Viewer {
                 framebuffer,
                 &self.shaders.wireframe,
                 ugli::DrawMode::Lines { line_width: 1.0 },
-                &self.wireframe_geometry,
+                &self.sprite.wireframe_geometry,
                 (
                     ugli::uniforms! {
                         u_texture: &self.white_texture,
@@ -189,10 +283,10 @@ impl geng::State for Viewer {
             framebuffer,
             &self.shaders.program,
             ugli::DrawMode::Triangles,
-            &self.sprite.mesh,
+            &self.sprite.shape.mesh,
             (
                 ugli::uniforms! {
-                    u_texture: &self.sprite.texture,
+                    u_texture: &self.sprite.shape.texture,
                 },
                 self.camera.uniforms(self.framebuffer_size),
             ),
@@ -202,8 +296,11 @@ impl geng::State for Viewer {
                 ..default()
             },
         );
+
+        self.egui.draw(framebuffer);
     }
     fn handle_event(&mut self, event: geng::Event) {
+        self.egui.handle_event(event.clone());
         match event {
             geng::Event::KeyPress { key } => match key {
                 geng::Key::C => {
@@ -213,7 +310,7 @@ impl geng::State for Viewer {
                     self.options.wireframe = !self.options.wireframe;
                 }
                 geng::Key::Escape => {
-                    self.transition = Some(geng::state::Transition::Pop);
+                    self.should_quit = true;
                 }
                 _ => {}
             },
@@ -233,11 +330,27 @@ impl geng::State for Viewer {
             _ => {}
         }
     }
-    fn transition(&mut self) -> Option<geng::state::Transition> {
-        self.transition.take()
-    }
-}
 
-pub async fn run(geng: &Geng, sprite: sprite_shape::ThickSprite<Vertex>) {
-    geng.run_state(Viewer::new(geng, sprite).await).await;
+    async fn maybe_reload(&mut self) {
+        if self.should_reload {
+            self.sprite = Sprite::new(&self.geng, &self.path, &self.sprite_options).await;
+            self.should_reload = false;
+        }
+    }
+
+    pub async fn run(mut self) {
+        let geng = self.geng.clone();
+        let mut timer = Timer::new();
+        while let Some(event) = geng.window().events().next().await {
+            if let geng::Event::Draw = event {
+                self.update(timer.tick());
+                geng.window().with_framebuffer(|framebuffer| {
+                    self.draw(framebuffer);
+                });
+                self.maybe_reload().await;
+            } else {
+                self.handle_event(event);
+            }
+        }
+    }
 }

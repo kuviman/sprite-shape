@@ -25,29 +25,24 @@ struct CliArgs {
 fn main() {
     let cli_args: CliArgs = cli::parse();
     Geng::run("thick sprite", move |geng| async move {
-        let sprite: sprite_shape::ThickSprite<viewer::Vertex> = geng
-            .asset_manager()
-            .load_with(&cli_args.path, &{
-                let mut options = geng_sprite_shape::Options::default();
-                macro_rules! options {
+        let mut options = geng_sprite_shape::Options::default();
+        macro_rules! options {
                     ($($op:ident,)*) => {
                         $(if let Some($op) = cli_args.$op {
                             options.$op = $op;
                         })*
                     }
                 }
-                options! {
-                    cell_size,
-                    iso,
-                    thickness,
-                    back_face,
-                    front_face,
-                };
-                options
-            })
+        options! {
+            cell_size,
+            iso,
+            thickness,
+            back_face,
+            front_face,
+        };
+        viewer::Viewer::new(&geng, &cli_args.path, options)
             .await
-            .unwrap();
-
-        viewer::run(&geng, sprite).await;
+            .run()
+            .await;
     });
 }
