@@ -201,7 +201,7 @@ impl Viewer {
                     selection.replace(Some(selected));
                 });
             }
-            if ui.button("Export OBJ").clicked() {
+            if ui.button("Export GLTF").clicked() {
                 if let Some(sprite) = &self.sprite {
                     let _ = file_dialog::save(
                         "sprite-shape.glb",
