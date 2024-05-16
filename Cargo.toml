@@ -7,6 +7,7 @@ edition = "2021"
 geng.git = "https://github.com/geng-engine/geng"
 geng-egui.git = "https://github.com/geng-engine/geng-egui"
 serde = "1"
+gltf = "1"
 
 [patch.crates-io]
 # https://github.com/smol-rs/async-broadcast/pull/47

@@ -4,6 +4,7 @@ use geng::prelude::*;
 use geng_sprite_shape as sprite_shape;
 
 mod viewer;
+mod glb;
 
 #[derive(clap::Parser)]
 struct CliArgs {

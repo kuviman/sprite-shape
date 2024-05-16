@@ -5,9 +5,8 @@ use geng_egui::*;
 
 #[derive(ugli::Vertex, Clone, Copy)]
 pub struct Vertex {
-    a_pos: vec3<f32>,
-    a_uv: vec2<f32>,
-    a_color: Rgba<f32>,
+    pub a_pos: vec3<f32>,
+    pub a_uv: vec2<f32>,
 }
 
 impl From<geng_sprite_shape::Vertex> for Vertex {
@@ -15,7 +14,6 @@ impl From<geng_sprite_shape::Vertex> for Vertex {
         Self {
             a_pos: value.a_pos,
             a_uv: value.a_uv,
-            a_color: Hsla::new(thread_rng().gen(), 0.5, 0.5, 1.0).into(),
         }
     }
 }
@@ -202,6 +200,14 @@ impl Viewer {
                 file_dialog::select(move |selected| {
                     selection.replace(Some(selected));
                 });
+            }
+            if ui.button("Export OBJ").clicked() {
+                if let Some(sprite) = &self.sprite {
+                    let _ = file_dialog::save(
+                        "sprite-shape.glb",
+                        &glb::save(self.geng.ugli(), &sprite.shape),
+                    );
+                }
             }
             if ui
                 .add(egui::Checkbox::new(
