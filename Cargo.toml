@@ -1,7 +1,8 @@
 [package]
-name = "geng-thick-sprite"
+name = "geng-sprite-shape"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 geng.git = "https://github.com/geng-engine/geng"
+serde = "1"

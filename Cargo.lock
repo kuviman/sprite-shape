@@ -2065,6 +2065,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "geng-sprite-shape"
+version = "0.1.0"
+dependencies = [
+ "geng",
+ "serde",
+]
+
+[[package]]
 name = "geng-state"
 version = "0.18.0"
 source = "git+https://github.com/geng-engine/geng#103bb24681e75d2483c1fe1084897dd6d0bc56fe"
@@ -2081,13 +2089,6 @@ source = "git+https://github.com/geng-engine/geng#103bb24681e75d2483c1fe1084897d
 dependencies = [
  "batbox-la",
  "ugli",
-]
-
-[[package]]
-name = "geng-thick-sprite"
-version = "0.1.0"
-dependencies = [
- "geng",
 ]
 
 [[package]]
