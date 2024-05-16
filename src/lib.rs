@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use geng::prelude::{itertools::Itertools, *};
 
@@ -211,6 +211,42 @@ impl Default for Options {
     }
 }
 
+fn fix_texture(ugli: &Ugli, texture: &ugli::Texture) -> ugli::Texture {
+    let framebuffer =
+        ugli::FramebufferRead::new_color(ugli, ugli::ColorAttachmentRead::Texture(texture));
+    let data = framebuffer.read_color();
+    let mut queue = VecDeque::new();
+    let mut visited = HashSet::new();
+    for x in 0..texture.size().x {
+        for y in 0..texture.size().y {
+            if data.get(x, y).a == u8::MAX {
+                queue.push_back((vec2(x, y), vec2(x, y)));
+                visited.insert(vec2(x, y));
+            }
+        }
+    }
+    let mut new_data = vec![vec![Rgba::<f32>::BLUE; texture.size().y]; texture.size().x];
+    while let Some((v, nearest)) = queue.pop_front() {
+        new_data[v.x][v.y] = data.get(nearest.x, nearest.y).convert();
+        for d in [vec2(-1, 0), vec2(1, 0), vec2(0, 1), vec2(0, -1)] {
+            let nv = v.map(|x| x as i32) + d;
+            if nv.x < 0 || nv.y < 0 {
+                continue;
+            }
+            let nv = nv.map(|x| x as usize);
+            if nv.x >= texture.size().x || nv.y >= texture.size().y {
+                continue;
+            }
+            if visited.contains(&nv) {
+                continue;
+            }
+            queue.push_back((nv, nearest));
+            visited.insert(nv);
+        }
+    }
+    ugli::Texture::new_with(ugli, texture.size(), |pos| new_data[pos.x][pos.y])
+}
+
 impl<V: ugli::Vertex + From<Vertex> + 'static> geng::asset::Load for ThickSprite<V> {
     type Options = Options;
     fn load(
@@ -218,14 +254,18 @@ impl<V: ugli::Vertex + From<Vertex> + 'static> geng::asset::Load for ThickSprite
         path: &std::path::Path,
         options: &Self::Options,
     ) -> geng::asset::Future<Self> {
-        let texture = manager.load(path);
+        let path = path.to_owned();
         let manager = manager.clone();
         let options = *options;
         async move {
-            let texture = texture.await?;
+            let texture = manager.load(path).await?;
             let vertices = generate_mesh(manager.ugli(), &texture, &options);
+            let fixed_texture = fix_texture(manager.ugli(), &texture);
             let mesh = ugli::VertexBuffer::new_static(manager.ugli(), vertices);
-            Ok(Self { texture, mesh })
+            Ok(Self {
+                texture: fixed_texture,
+                mesh,
+            })
         }
         .boxed_local()
     }
