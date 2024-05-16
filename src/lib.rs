@@ -27,20 +27,27 @@ fn marching_triangles(bb: Aabb2<i32>, f: impl Fn(vec2<i32>) -> f32, iso: f32) ->
     let mut result = Vec::new();
     let mut march = |vs: &[vec2<i32>]| {
         let mut current = Vec::new();
-        for (&a, &b) in vs.iter().circular_tuple_windows() {
-            let va = f(a);
-            let vb = f(b);
-            let a = a.map(|x| x as f32);
-            let b = b.map(|x| x as f32);
+        for (&ia, &ib) in vs.iter().circular_tuple_windows() {
+            let va = f(ia);
+            let vb = f(ib);
+            let a = ia.map(|x| x as f32);
+            let b = ib.map(|x| x as f32);
             if va >= iso {
                 current.push(MarchVertex { pos: a, value: va });
             }
-            let t = (iso - va) / (vb - va);
-            if t > 0.0 && t < 1.0 {
-                current.push(MarchVertex {
-                    pos: a + (b - a) * t,
-                    value: iso,
-                });
+            {
+                let (a, b, va, vb) = if **ia < **ib {
+                    (a, b, va, vb)
+                } else {
+                    (b, a, vb, va)
+                };
+                let t = (iso - va) / (vb - va);
+                if t > 0.0 && t < 1.0 {
+                    current.push(MarchVertex {
+                        pos: a + (b - a) * t,
+                        value: iso,
+                    });
+                }
             }
             if vb >= iso {
                 current.push(MarchVertex { pos: b, value: vb });
