@@ -2,6 +2,6 @@ sensitivity = 0.5
 
 [camera]
 fov = 60
-distance = 5
+distance = 1
 rotation = 30
 attack_angle = -40

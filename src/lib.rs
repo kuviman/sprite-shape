@@ -152,9 +152,24 @@ fn generate_mesh<V: From<Vertex>>(
                     .map(|normal| normal.extend(0.0))
                     .unwrap_or(vec3(0.0, 0.0, 1.0)),
             }
-            .into()
         })
+        .map(|mut v| {
+            v.a_pos.z *= options.thickness * 0.5;
+            match options.scaling {
+                ScalingMode::FixedHeight(height) => {
+                    v.a_pos.y *= height * 0.5;
+                    v.a_pos.x *= height * 0.5 * texture.size().map(|x| x as f32).aspect();
+                }
+            }
+            v
+        })
+        .map(|v| v.into())
         .collect()
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ScalingMode {
+    FixedHeight(f32),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -162,6 +177,8 @@ pub struct Options {
     pub cell_size: usize,
     pub iso: f32,
     pub normal_uv_offset: f32,
+    pub thickness: f32,
+    pub scaling: ScalingMode,
 }
 
 impl Default for Options {
@@ -170,6 +187,8 @@ impl Default for Options {
             cell_size: 10,
             iso: 0.5,
             normal_uv_offset: 2.0,
+            thickness: 0.1,
+            scaling: ScalingMode::FixedHeight(1.0),
         }
     }
 }
