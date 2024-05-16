@@ -13,6 +13,10 @@ struct CliArgs {
     iso: Option<f32>,
     #[clap(long)]
     thickness: Option<f32>,
+    #[clap(long)]
+    back_face: Option<bool>,
+    #[clap(long)]
+    front_face: Option<bool>,
     path: PathBuf,
     #[clap(flatten)]
     geng: geng::CliArgs,
@@ -25,15 +29,20 @@ fn main() {
             .asset_manager()
             .load_with(&cli_args.path, &{
                 let mut options = geng_sprite_shape::Options::default();
-                if let Some(cell_size) = cli_args.cell_size {
-                    options.cell_size = cell_size;
+                macro_rules! options {
+                    ($($op:ident,)*) => {
+                        $(if let Some($op) = cli_args.$op {
+                            options.$op = $op;
+                        })*
+                    }
                 }
-                if let Some(iso) = cli_args.iso {
-                    options.iso = iso;
-                }
-                if let Some(thickness) = cli_args.thickness {
-                    options.thickness = thickness;
-                }
+                options! {
+                    cell_size,
+                    iso,
+                    thickness,
+                    back_face,
+                    front_face,
+                };
                 options
             })
             .await

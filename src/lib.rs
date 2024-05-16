@@ -121,25 +121,34 @@ fn generate_mesh<V: From<Vertex>>(
         .map(|(pos, normal)| (**pos.map(r32), normal))
         .collect();
 
-    faces
-        .iter()
-        .flatten()
-        .map(|v| (v, 1.0))
-        .chain(faces.iter().flat_map(|face| {
-            face.iter()
-                .circular_tuple_windows()
-                .filter_map(|(a, b)| {
-                    (a.value == iso && b.value == iso).then_some([
-                        (a, 1.0),
-                        (b, -1.0),
-                        (a, -1.0),
-                        (a, 1.0),
-                        (b, 1.0),
-                        (b, -1.0),
-                    ])
-                })
-                .flatten()
-        }))
+    let front = options
+        .front_face
+        .then_some(faces.iter().flatten().map(|v| (v, 1.0)))
+        .into_iter()
+        .flatten();
+    let back = options
+        .back_face
+        .then_some(faces.iter().flatten().map(|v| (v, -1.0)))
+        .into_iter()
+        .flatten();
+
+    let side = faces.iter().flat_map(|face| {
+        face.iter()
+            .circular_tuple_windows()
+            .filter_map(|(a, b)| {
+                (a.value == iso && b.value == iso).then_some([
+                    (a, 1.0),
+                    (b, -1.0),
+                    (a, -1.0),
+                    (a, 1.0),
+                    (b, 1.0),
+                    (b, -1.0),
+                ])
+            })
+            .flatten()
+    });
+
+    itertools::chain![front, back, side]
         .map(|(v, z)| {
             let normal = normals.get(&**v.pos.map(r32)).copied();
             let pixel_pos = v.pos.map(|x| (x + 0.5) * cell_size as f32);
@@ -179,6 +188,8 @@ pub struct Options {
     pub normal_uv_offset: f32,
     pub thickness: f32,
     pub scaling: ScalingMode,
+    pub front_face: bool,
+    pub back_face: bool,
 }
 
 impl Default for Options {
@@ -189,6 +200,8 @@ impl Default for Options {
             normal_uv_offset: 2.0,
             thickness: 0.1,
             scaling: ScalingMode::FixedHeight(1.0),
+            front_face: true,
+            back_face: true,
         }
     }
 }
