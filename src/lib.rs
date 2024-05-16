@@ -80,9 +80,12 @@ fn generate_mesh<V: From<Vertex>>(image: &geng::image::RgbaImage, options: &Opti
     let blurred = geng::image::imageops::blur(image, options.blur_sigma);
     let iso = options.iso;
 
-    let cells = Aabb2::ZERO.extend_positive(
-        image_size.map(|x| (x as i32 + options.cell_size as i32 - 1) / options.cell_size as i32),
-    );
+    let cells = Aabb2::ZERO
+        .extend_positive(
+            image_size
+                .map(|x| (x as i32 + options.cell_size as i32 - 1) / options.cell_size as i32),
+        )
+        .extend_uniform(2);
 
     let faces = marching_triangles(
         cells,
