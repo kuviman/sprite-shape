@@ -225,7 +225,16 @@ impl Viewer {
             }
             if ui
                 .add(
-                    egui::Slider::new(&mut self.sprite_options.cell_size, 1..=100)
+                    egui::Slider::new(&mut self.sprite_options.blur_sigma, 0.0..=50.0)
+                        .text("blur_sigma"),
+                )
+                .drag_released()
+            {
+                self.should_reload = true;
+            }
+            if ui
+                .add(
+                    egui::Slider::new(&mut self.sprite_options.cell_size, 1..=50)
                         .text("cell_size"),
                 )
                 .drag_released()
@@ -234,7 +243,7 @@ impl Viewer {
             }
             if ui
                 .add(
-                    egui::Slider::new(&mut self.sprite_options.thickness, 0.0..=1.0)
+                    egui::Slider::new(&mut self.sprite_options.thickness, 0.0..=0.1)
                         .text("thickness"),
                 )
                 .drag_released()

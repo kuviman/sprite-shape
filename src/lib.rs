@@ -198,11 +198,11 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            blur_sigma: 0.5,
+            blur_sigma: 10.0,
             cell_size: 10,
             iso: 0.5,
             normal_uv_offset: 2.0,
-            thickness: 0.1,
+            thickness: 0.01,
             scaling: ScalingMode::FixedHeight(1.0),
             front_face: true,
             back_face: true,
