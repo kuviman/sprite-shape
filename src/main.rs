@@ -19,33 +19,41 @@ struct CliArgs {
     front_face: Option<bool>,
     #[clap(long)]
     blur_sigma: Option<f32>,
-    path: PathBuf,
+    path: Option<PathBuf>,
     #[clap(flatten)]
     geng: geng::CliArgs,
 }
 
 fn main() {
     let cli_args: CliArgs = cli::parse();
-    Geng::run("thick sprite", move |geng| async move {
-        let mut options = geng_sprite_shape::Options::default();
-        macro_rules! options {
+    Geng::run_with(
+        &{
+            let mut options = geng::ContextOptions::default();
+            options.window.title = env!("CARGO_PKG_NAME").to_owned();
+            options.with_cli(&cli_args.geng);
+            options
+        },
+        move |geng| async move {
+            let mut options = geng_sprite_shape::Options::default();
+            macro_rules! options {
                     ($($op:ident,)*) => {
                         $(if let Some($op) = cli_args.$op {
                             options.$op = $op;
                         })*
                     }
                 }
-        options! {
-            cell_size,
-            iso,
-            thickness,
-            back_face,
-            front_face,
-            blur_sigma,
-        };
-        viewer::Viewer::new(&geng, &cli_args.path, options)
-            .await
-            .run()
-            .await;
-    });
+            options! {
+                cell_size,
+                iso,
+                thickness,
+                back_face,
+                front_face,
+                blur_sigma,
+            };
+            viewer::Viewer::new(&geng, cli_args.path.clone(), options)
+                .await
+                .run()
+                .await;
+        },
+    );
 }

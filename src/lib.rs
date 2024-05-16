@@ -7,6 +7,19 @@ pub struct ThickSprite<V: ugli::Vertex> {
     pub mesh: ugli::VertexBuffer<V>,
 }
 
+impl<V: ugli::Vertex + From<Vertex>> ThickSprite<V> {
+    pub fn new(ugli: &Ugli, image: &geng::image::RgbaImage, options: &Options) -> Self {
+        let vertices = generate_mesh(image, options);
+        let texture = ugli::Texture::from_image_image(ugli, image.clone());
+        let fixed_texture = fix_texture(ugli, &texture);
+        let mesh = ugli::VertexBuffer::new_static(ugli, vertices);
+        Self {
+            texture: fixed_texture,
+            mesh,
+        }
+    }
+}
+
 #[derive(ugli::Vertex)]
 pub struct Vertex {
     pub a_pos: vec3<f32>,
@@ -258,14 +271,7 @@ impl<V: ugli::Vertex + From<Vertex> + 'static> geng::asset::Load for ThickSprite
         let options = *options;
         async move {
             let image: geng::image::RgbaImage = manager.load(path).await?;
-            let vertices = generate_mesh(&image, &options);
-            let texture = ugli::Texture::from_image_image(manager.ugli(), image);
-            let fixed_texture = fix_texture(manager.ugli(), &texture);
-            let mesh = ugli::VertexBuffer::new_static(manager.ugli(), vertices);
-            Ok(Self {
-                texture: fixed_texture,
-                mesh,
-            })
+            Ok(Self::new(manager.ugli(), &image, &options))
         }
         .boxed_local()
     }

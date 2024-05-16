@@ -11,6 +11,6 @@
     in
     {
       src = ./.;
-      extraBuildInputs = [ pkgs.caddy ];
+      extraBuildInputs = [ pkgs.caddy pkgs.kdialog ];
     });
 }

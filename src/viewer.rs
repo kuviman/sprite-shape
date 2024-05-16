@@ -1,6 +1,4 @@
-use std::path::Path;
-
-use geng::prelude::itertools::Itertools;
+use geng::prelude::{futures::AsyncReadExt, itertools::Itertools};
 
 use super::*;
 use geng_egui::*;
@@ -87,9 +85,9 @@ struct Sprite {
 }
 
 impl Sprite {
-    async fn new(geng: &Geng, path: impl AsRef<Path>, options: &sprite_shape::Options) -> Self {
+    fn new(geng: &Geng, image: &geng::image::RgbaImage, options: &sprite_shape::Options) -> Self {
         let shape: sprite_shape::ThickSprite<Vertex> =
-            geng.asset_manager().load_with(path, options).await.unwrap();
+            sprite_shape::ThickSprite::new(geng.ugli(), image, options);
         Self {
             wireframe_geometry: ugli::VertexBuffer::new_static(
                 geng.ugli(),
@@ -118,18 +116,19 @@ pub struct Viewer {
     framebuffer_size: vec2<f32>,
     camera: Camera,
     sprite_options: sprite_shape::Options,
-    path: PathBuf,
-    sprite: Sprite,
+    image: Option<geng::image::RgbaImage>,
+    sprite: Option<Sprite>,
     drag: Option<vec2<f64>>,
     should_quit: bool,
     egui: EguiGeng,
     should_reload: bool,
+    file_selection: Rc<RefCell<Option<file_dialog::SelectedFile>>>,
 }
 
 impl Viewer {
     pub async fn new(
         geng: &Geng,
-        path: impl AsRef<Path>,
+        path: Option<PathBuf>,
         sprite_options: sprite_shape::Options,
     ) -> Self {
         let config: Config = file::load_detect(run_dir().join("assets").join("config.toml"))
@@ -140,15 +139,21 @@ impl Viewer {
             .load(run_dir().join("assets").join("shaders"))
             .await
             .unwrap();
+        let image = match path {
+            Some(path) => Some(geng.asset_manager().load(path).await.unwrap()),
+            None => None,
+        };
         Self {
             egui: EguiGeng::new(geng),
             geng: geng.clone(),
             framebuffer_size: vec2::splat(1.0),
             shaders,
             white_texture: ugli::Texture::new_with(geng.ugli(), vec2::splat(1), |_| Rgba::WHITE),
-            sprite: Sprite::new(geng, path.as_ref(), &sprite_options).await,
-            path: path.as_ref().to_owned(),
+            sprite: image
+                .as_ref()
+                .map(|image| Sprite::new(geng, image, &sprite_options)),
             sprite_options,
+            image,
             camera: Camera {
                 fov: Angle::from_degrees(config.camera.fov),
                 rotation: Angle::from_degrees(config.camera.rotation),
@@ -160,6 +165,7 @@ impl Viewer {
             options: default(),
             should_quit: false,
             should_reload: false,
+            file_selection: default(),
         }
     }
 
@@ -190,15 +196,13 @@ impl Viewer {
 
     fn ui(&mut self) {
         egui::Window::new("SpriteShape").show(self.egui.get_context(), |ui| {
-            ui.heading("viewer options");
-            ui.checkbox(&mut self.options.wireframe, "wireframe");
-            ui.checkbox(&mut self.options.culling, "culling");
-
             ui.heading("sprite options");
-            ui.horizontal(|ui| {
-                ui.label("Your name: ");
-                // ui.text_edit_singleline(&mut self.name);
-            });
+            if ui.button("Select image").clicked() {
+                let selection = self.file_selection.clone();
+                file_dialog::select(move |selected| {
+                    selection.replace(Some(selected));
+                });
+            }
             if ui
                 .add(egui::Checkbox::new(
                     &mut self.sprite_options.front_face,
@@ -234,8 +238,7 @@ impl Viewer {
             }
             if ui
                 .add(
-                    egui::Slider::new(&mut self.sprite_options.cell_size, 1..=50)
-                        .text("cell_size"),
+                    egui::Slider::new(&mut self.sprite_options.cell_size, 1..=50).text("cell_size"),
                 )
                 .drag_released()
             {
@@ -250,10 +253,10 @@ impl Viewer {
             {
                 self.should_reload = true;
             }
-            // if ui.button("Click each year").clicked() {
-            //     self.age += 1;
-            // }
-            // ui.label(format!("Hello '{}', age {}", self.name, self.age));
+
+            ui.heading("viewer options");
+            ui.checkbox(&mut self.options.wireframe, "wireframe");
+            ui.checkbox(&mut self.options.culling, "culling");
         });
     }
     fn update(&mut self, _delta_time: time::Duration) {
@@ -269,42 +272,44 @@ impl Viewer {
             Some(1.0),
             None,
         );
-        if self.options.wireframe {
+        if let Some(sprite) = &self.sprite {
+            if self.options.wireframe {
+                ugli::draw(
+                    framebuffer,
+                    &self.shaders.wireframe,
+                    ugli::DrawMode::Lines { line_width: 1.0 },
+                    &sprite.wireframe_geometry,
+                    (
+                        ugli::uniforms! {
+                            u_texture: &self.white_texture,
+                            u_color: self.config.wireframe_color,
+                        },
+                        self.camera.uniforms(self.framebuffer_size),
+                    ),
+                    ugli::DrawParameters {
+                        depth_func: Some(ugli::DepthFunc::LessOrEqual),
+                        ..default()
+                    },
+                );
+            }
             ugli::draw(
                 framebuffer,
-                &self.shaders.wireframe,
-                ugli::DrawMode::Lines { line_width: 1.0 },
-                &self.sprite.wireframe_geometry,
+                &self.shaders.program,
+                ugli::DrawMode::Triangles,
+                &sprite.shape.mesh,
                 (
                     ugli::uniforms! {
-                        u_texture: &self.white_texture,
-                        u_color: self.config.wireframe_color,
+                        u_texture: &sprite.shape.texture,
                     },
                     self.camera.uniforms(self.framebuffer_size),
                 ),
                 ugli::DrawParameters {
-                    depth_func: Some(ugli::DepthFunc::LessOrEqual),
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    cull_face: self.options.culling.then_some(ugli::CullFace::Back),
                     ..default()
                 },
             );
         }
-        ugli::draw(
-            framebuffer,
-            &self.shaders.program,
-            ugli::DrawMode::Triangles,
-            &self.sprite.shape.mesh,
-            (
-                ugli::uniforms! {
-                    u_texture: &self.sprite.shape.texture,
-                },
-                self.camera.uniforms(self.framebuffer_size),
-            ),
-            ugli::DrawParameters {
-                depth_func: Some(ugli::DepthFunc::Less),
-                cull_face: self.options.culling.then_some(ugli::CullFace::Back),
-                ..default()
-            },
-        );
 
         self.egui.draw(framebuffer);
     }
@@ -342,7 +347,9 @@ impl Viewer {
 
     async fn maybe_reload(&mut self) {
         if self.should_reload {
-            self.sprite = Sprite::new(&self.geng, &self.path, &self.sprite_options).await;
+            if let Some(image) = &self.image {
+                self.sprite = Some(Sprite::new(&self.geng, image, &self.sprite_options));
+            }
             self.should_reload = false;
         }
     }
@@ -353,6 +360,22 @@ impl Viewer {
         while let Some(event) = geng.window().events().next().await {
             if let geng::Event::Draw = event {
                 self.update(timer.tick());
+                if let Some(file) = self.file_selection.take() {
+                    if let Ok(mut reader) = file.reader() {
+                        let mut buf = Vec::new();
+                        if reader.read_to_end(&mut buf).await.is_ok() {
+                            match geng::image::load_from_memory(&buf) {
+                                Ok(image) => {
+                                    self.image = Some(image.into());
+                                    self.should_reload = true;
+                                }
+                                Err(e) => {
+                                    log::error!("error: {e}");
+                                }
+                            }
+                        }
+                    }
+                }
                 geng.window().with_framebuffer(|framebuffer| {
                     self.draw(framebuffer);
                 });
