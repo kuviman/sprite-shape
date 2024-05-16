@@ -54,14 +54,26 @@ struct Config {
     camera: CameraConfig,
 }
 
+struct ViewerOptions {
+    culling: bool,
+}
+
+impl Default for ViewerOptions {
+    fn default() -> Self {
+        Self { culling: true }
+    }
+}
+
 struct Viewer {
     geng: Geng,
+    options: ViewerOptions,
     config: Config,
     framebuffer_size: vec2<f32>,
     program: ugli::Program,
     camera: Camera,
     sprite: sprite_shape::ThickSprite<Vertex>,
     drag: Option<vec2<f64>>,
+    transition: Option<geng::state::Transition>,
 }
 
 impl Viewer {
@@ -87,6 +99,8 @@ impl Viewer {
             },
             drag: None,
             config,
+            options: default(),
+            transition: None,
         }
     }
 
@@ -130,12 +144,22 @@ impl geng::State for Viewer {
             ),
             ugli::DrawParameters {
                 depth_func: Some(ugli::DepthFunc::Less),
+                cull_face: self.options.culling.then_some(ugli::CullFace::Back),
                 ..default()
             },
         );
     }
     fn handle_event(&mut self, event: geng::Event) {
         match event {
+            geng::Event::KeyPress { key } => match key {
+                geng::Key::C => {
+                    self.options.culling = !self.options.culling;
+                }
+                geng::Key::Escape => {
+                    self.transition = Some(geng::state::Transition::Pop);
+                }
+                _ => {}
+            },
             geng::Event::MousePress { .. } => {
                 if let Some(cursor_pos) = self.geng.window().cursor_position() {
                     self.start_drag(cursor_pos);
@@ -151,6 +175,9 @@ impl geng::State for Viewer {
             }
             _ => {}
         }
+    }
+    fn transition(&mut self) -> Option<geng::state::Transition> {
+        self.transition.take()
     }
 }
 

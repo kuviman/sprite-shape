@@ -128,7 +128,12 @@ fn generate_mesh<V: From<Vertex>>(
         .flatten();
     let back = options
         .back_face
-        .then_some(faces.iter().flatten().map(|v| (v, -1.0)))
+        .then_some(
+            faces
+                .iter()
+                .flat_map(|face| face.iter().rev())
+                .map(|v| (v, -1.0)),
+        )
         .into_iter()
         .flatten();
 
@@ -138,11 +143,11 @@ fn generate_mesh<V: From<Vertex>>(
             .filter_map(|(a, b)| {
                 (a.value == iso && b.value == iso).then_some([
                     (a, 1.0),
-                    (b, -1.0),
                     (a, -1.0),
-                    (a, 1.0),
-                    (b, 1.0),
                     (b, -1.0),
+                    (a, 1.0),
+                    (b, -1.0),
+                    (b, 1.0),
                 ])
             })
             .flatten()
