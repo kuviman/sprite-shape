@@ -1,6 +1,6 @@
 sensitivity = 0.5
 wireframe_color = "white"
-background_color = "black"
+background_color = "#333"
 
 [camera]
 fov = 60

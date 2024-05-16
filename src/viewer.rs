@@ -58,13 +58,15 @@ struct Config {
 }
 
 struct ViewerOptions {
+    background_color: Rgba<f32>,
     wireframe: bool,
     culling: bool,
 }
 
-impl Default for ViewerOptions {
-    fn default() -> Self {
+impl ViewerOptions {
+    fn new(config: &Config) -> Self {
         Self {
+            background_color: config.background_color,
             wireframe: false,
             culling: true,
         }
@@ -108,7 +110,7 @@ impl Sprite {
 pub struct Viewer {
     geng: Geng,
     shaders: Shaders,
-    options: ViewerOptions,
+    viewer_options: ViewerOptions,
     white_texture: ugli::Texture,
     config: Config,
     framebuffer_size: vec2<f32>,
@@ -159,8 +161,8 @@ impl Viewer {
                 distance: config.camera.distance,
             },
             drag: None,
+            viewer_options: ViewerOptions::new(&config),
             config,
-            options: default(),
             should_quit: false,
             should_reload: false,
             file_selection: default(),
@@ -261,8 +263,13 @@ impl Viewer {
             }
 
             ui.heading("viewer options");
-            ui.checkbox(&mut self.options.wireframe, "wireframe");
-            ui.checkbox(&mut self.options.culling, "culling");
+            ui.checkbox(&mut self.viewer_options.wireframe, "wireframe");
+            ui.checkbox(&mut self.viewer_options.culling, "culling");
+
+            ui.label("background color");
+            let mut color = self.viewer_options.background_color.to_vec4();
+            ui.color_edit_button_rgb((&mut color[..3]).try_into().unwrap());
+            self.viewer_options.background_color = Rgba::from_vec4(color);
         });
     }
     fn update(&mut self, _delta_time: time::Duration) {
@@ -274,12 +281,12 @@ impl Viewer {
         self.framebuffer_size = framebuffer.size().map(|x| x as f32);
         ugli::clear(
             framebuffer,
-            Some(self.config.background_color),
+            Some(self.viewer_options.background_color),
             Some(1.0),
             None,
         );
         if let Some(sprite) = &self.sprite {
-            if self.options.wireframe {
+            if self.viewer_options.wireframe {
                 ugli::draw(
                     framebuffer,
                     &self.shaders.wireframe,
@@ -311,7 +318,7 @@ impl Viewer {
                 ),
                 ugli::DrawParameters {
                     depth_func: Some(ugli::DepthFunc::Less),
-                    cull_face: self.options.culling.then_some(ugli::CullFace::Back),
+                    cull_face: self.viewer_options.culling.then_some(ugli::CullFace::Back),
                     ..default()
                 },
             );
@@ -324,10 +331,10 @@ impl Viewer {
         match event {
             geng::Event::KeyPress { key } => match key {
                 geng::Key::C => {
-                    self.options.culling = !self.options.culling;
+                    self.viewer_options.culling = !self.viewer_options.culling;
                 }
                 geng::Key::W => {
-                    self.options.wireframe = !self.options.wireframe;
+                    self.viewer_options.wireframe = !self.viewer_options.wireframe;
                 }
                 geng::Key::Escape => {
                     self.should_quit = true;
