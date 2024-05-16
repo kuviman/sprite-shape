@@ -167,8 +167,7 @@ fn generate_mesh<V: From<Vertex>>(image: &geng::image::RgbaImage, options: &Opti
         .map(|(v, z)| {
             let normal = normals.get(&**v.pos.map(r32)).copied();
             let pixel_pos = v.pos.map(|x| x * options.cell_size as f32);
-            let uv = (pixel_pos + normal.unwrap_or(vec2::ZERO) * options.normal_uv_offset)
-                / image_size.map(|x| x as f32);
+            let uv = pixel_pos / image_size.map(|x| x as f32);
             Vertex {
                 a_pos: uv.map(|x| x * 2.0 - 1.0).extend(z),
                 a_uv: uv,
@@ -201,7 +200,6 @@ pub struct Options {
     pub blur_sigma: f32,
     pub cell_size: usize,
     pub iso: f32,
-    pub normal_uv_offset: f32,
     pub thickness: f32,
     pub scaling: ScalingMode,
     pub front_face: bool,
@@ -214,7 +212,6 @@ impl Default for Options {
             blur_sigma: 10.0,
             cell_size: 10,
             iso: 0.5,
-            normal_uv_offset: 2.0,
             thickness: 0.01,
             scaling: ScalingMode::FixedHeight(1.0),
             front_face: true,
