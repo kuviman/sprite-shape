@@ -1,6 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs-stable.url = "nixpkgs/release-23.11";
     geng.url = "github:geng-engine/cargo-geng";
     geng.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -11,6 +12,6 @@
     in
     {
       src = ./.;
-      extraBuildInputs = [ pkgs.caddy pkgs.kdialog ];
+      extraBuildInputs = [ pkgs.caddy pkgs.kdialog pkgs-stable.butler ];
     });
 }
