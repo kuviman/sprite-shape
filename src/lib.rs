@@ -75,43 +75,30 @@ fn marching_triangles(bb: Aabb2<i32>, f: impl Fn(vec2<i32>) -> f32, iso: f32) ->
     result
 }
 
-fn generate_mesh<V: From<Vertex>>(
-    ugli: &Ugli,
-    texture: &ugli::Texture,
-    options: &Options,
-) -> Vec<V> {
-    let framebuffer =
-        ugli::FramebufferRead::new_color(ugli, ugli::ColorAttachmentRead::Texture(texture));
-    let data = framebuffer.read_color();
-
-    let cell_size = options.cell_size;
-
-    let mut cells = vec![
-        vec![0.0; (texture.size().y + cell_size - 1) / cell_size];
-        (texture.size().x + cell_size - 1) / cell_size
-    ];
-    for x in 0..texture.size().x {
-        for y in 0..texture.size().y {
-            let cell_x = x / cell_size;
-            let cell_y = y / cell_size;
-            cells[cell_x][cell_y] += data.get(x, y).a as f32 / u8::MAX as f32;
-        }
-    }
-
-    for (x, col) in cells.iter_mut().enumerate() {
-        for (y, cell) in col.iter_mut().enumerate() {
-            let pixels = min(cell_size, texture.size().x - x * cell_size)
-                * min(cell_size, texture.size().y - y * cell_size);
-            *cell /= pixels as f32;
-        }
-    }
-
+fn generate_mesh<V: From<Vertex>>(image: &geng::image::RgbaImage, options: &Options) -> Vec<V> {
+    let image_size = vec2(image.width(), image.height());
+    let blurred = geng::image::imageops::blur(image, options.blur_sigma);
     let iso = options.iso;
 
+    let cells = Aabb2::ZERO.extend_positive(
+        image_size.map(|x| (x as i32 + options.cell_size as i32 - 1) / options.cell_size as i32),
+    );
+
     let faces = marching_triangles(
-        Aabb2::ZERO.extend_positive(vec2(cells.len(), cells[0].len()).map(|x| x as i32 - 1)),
-        |vec2(x, y)| cells[x as usize][y as usize],
-        iso,
+        cells,
+        |cell_pos| {
+            let pos = cell_pos * options.cell_size as i32;
+            if pos.x < 0
+                || pos.y < 0
+                || pos.x >= image.width() as i32
+                || pos.y >= image.height() as i32
+            {
+                return 0.0;
+            }
+            let vec2(x, y) = pos.map(|x| x as u32);
+            blurred.get_pixel(x, image_size.y - 1 - y)[3] as f32 / u8::MAX as f32
+        },
+        options.iso,
     );
 
     let normals: BTreeMap<[R32; 2], vec2<f32>> = faces
@@ -163,9 +150,9 @@ fn generate_mesh<V: From<Vertex>>(
     itertools::chain![front, back, side]
         .map(|(v, z)| {
             let normal = normals.get(&**v.pos.map(r32)).copied();
-            let pixel_pos = v.pos.map(|x| (x + 0.5) * cell_size as f32);
+            let pixel_pos = v.pos.map(|x| x * options.cell_size as f32);
             let uv = (pixel_pos + normal.unwrap_or(vec2::ZERO) * options.normal_uv_offset)
-                / texture.size().map(|x| x as f32);
+                / image_size.map(|x| x as f32);
             Vertex {
                 a_pos: uv.map(|x| x * 2.0 - 1.0).extend(z),
                 a_uv: uv,
@@ -179,7 +166,7 @@ fn generate_mesh<V: From<Vertex>>(
             match options.scaling {
                 ScalingMode::FixedHeight(height) => {
                     v.a_pos.y *= height * 0.5;
-                    v.a_pos.x *= height * 0.5 * texture.size().map(|x| x as f32).aspect();
+                    v.a_pos.x *= height * 0.5 * image_size.map(|x| x as f32).aspect();
                 }
             }
             v
@@ -195,6 +182,7 @@ pub enum ScalingMode {
 
 #[derive(Debug, Copy, Clone)]
 pub struct Options {
+    pub blur_sigma: f32,
     pub cell_size: usize,
     pub iso: f32,
     pub normal_uv_offset: f32,
@@ -207,6 +195,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            blur_sigma: 0.5,
             cell_size: 10,
             iso: 0.5,
             normal_uv_offset: 2.0,
@@ -265,8 +254,9 @@ impl<V: ugli::Vertex + From<Vertex> + 'static> geng::asset::Load for ThickSprite
         let manager = manager.clone();
         let options = *options;
         async move {
-            let texture = manager.load(path).await?;
-            let vertices = generate_mesh(manager.ugli(), &texture, &options);
+            let image: geng::image::RgbaImage = manager.load(path).await?;
+            let vertices = generate_mesh(&image, &options);
+            let texture = ugli::Texture::from_image_image(manager.ugli(), image);
             let fixed_texture = fix_texture(manager.ugli(), &texture);
             let mesh = ugli::VertexBuffer::new_static(manager.ugli(), vertices);
             Ok(Self {

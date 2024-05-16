@@ -17,6 +17,8 @@ struct CliArgs {
     back_face: Option<bool>,
     #[clap(long)]
     front_face: Option<bool>,
+    #[clap(long)]
+    blur_sigma: Option<f32>,
     path: PathBuf,
     #[clap(flatten)]
     geng: geng::CliArgs,
@@ -39,6 +41,7 @@ fn main() {
             thickness,
             back_face,
             front_face,
+            blur_sigma,
         };
         viewer::Viewer::new(&geng, &cli_args.path, options)
             .await
