@@ -11,6 +11,8 @@ struct CliArgs {
     cell_size: Option<usize>,
     #[clap(long)]
     iso: Option<f32>,
+    #[clap(long)]
+    thickness: Option<f32>,
     path: PathBuf,
     #[clap(flatten)]
     geng: geng::CliArgs,
@@ -28,6 +30,9 @@ fn main() {
                 }
                 if let Some(iso) = cli_args.iso {
                     options.iso = iso;
+                }
+                if let Some(thickness) = cli_args.thickness {
+                    options.thickness = thickness;
                 }
                 options
             })
