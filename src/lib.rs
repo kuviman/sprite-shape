@@ -190,12 +190,12 @@ fn generate_mesh<V: From<Vertex>>(image: &geng::image::RgbaImage, options: &Opti
         .collect()
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum ScalingMode {
     FixedHeight(f32),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Options {
     pub blur_sigma: f32,
     pub cell_size: usize,

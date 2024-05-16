@@ -123,6 +123,7 @@ pub struct Viewer {
     egui: EguiGeng,
     should_reload: bool,
     file_selection: Rc<RefCell<Option<file_dialog::SelectedFile>>>,
+    settings_file_selection: Rc<RefCell<Option<file_dialog::SelectedFile>>>,
 }
 
 impl Viewer {
@@ -144,6 +145,7 @@ impl Viewer {
             None => None,
         };
         Self {
+            settings_file_selection: default(),
             egui: EguiGeng::new(geng),
             geng: geng.clone(),
             framebuffer_size: vec2::splat(1.0),
@@ -208,6 +210,22 @@ impl Viewer {
                     let _ = file_dialog::save(
                         "sprite-shape.glb",
                         &glb::save(self.geng.ugli(), &sprite.shape),
+                    );
+                }
+            }
+            if ui.button("Load settings.json").clicked() {
+                let selection = self.settings_file_selection.clone();
+                file_dialog::select(move |selected| {
+                    selection.replace(Some(selected));
+                });
+            }
+            if ui.button("Export settings.json").clicked() {
+                if let Some(_sprite) = &self.sprite {
+                    let _ = file_dialog::save(
+                        "sprite-shape.json",
+                        serde_json::to_string_pretty(&self.sprite_options)
+                            .unwrap()
+                            .as_bytes(),
                     );
                 }
             }
@@ -373,6 +391,15 @@ impl Viewer {
         while let Some(event) = geng.window().events().next().await {
             if let geng::Event::Draw = event {
                 self.update(timer.tick());
+                if let Some(file) = self.settings_file_selection.take() {
+                    if let Ok(mut reader) = file.reader() {
+                        let mut buf = Vec::new();
+                        if reader.read_to_end(&mut buf).await.is_ok() {
+                            self.sprite_options = serde_json::from_slice(&buf).unwrap();
+                            self.should_reload = true;
+                        }
+                    }
+                }
                 if let Some(file) = self.file_selection.take() {
                     if let Ok(mut reader) = file.reader() {
                         let mut buf = Vec::new();
