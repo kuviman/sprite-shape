@@ -9,7 +9,10 @@ pub struct ThickSprite<V: ugli::Vertex> {
 
 impl<V: ugli::Vertex + From<Vertex>> ThickSprite<V> {
     pub fn new(ugli: &Ugli, image: &geng::image::RgbaImage, options: &Options) -> Self {
-        let vertices = generate_mesh(image, options);
+        let vertices = generate_mesh(image, options)
+            .into_iter()
+            .map(Into::into)
+            .collect();
         let texture = ugli::Texture::from_image_image(ugli, image.clone());
         let fixed_texture = fix_texture(ugli, &texture);
         let mesh = ugli::VertexBuffer::new_static(ugli, vertices);
@@ -88,7 +91,7 @@ fn marching_triangles(bb: Aabb2<i32>, f: impl Fn(vec2<i32>) -> f32, iso: f32) ->
     result
 }
 
-fn generate_mesh<V: From<Vertex>>(image: &geng::image::RgbaImage, options: &Options) -> Vec<V> {
+fn generate_mesh(image: &geng::image::RgbaImage, options: &Options) -> Vec<Vertex> {
     let image_size = vec2(image.width(), image.height());
     let blurred = geng::image::imageops::blur(image, options.blur_sigma);
     let iso = options.iso;
@@ -186,7 +189,6 @@ fn generate_mesh<V: From<Vertex>>(image: &geng::image::RgbaImage, options: &Opti
             }
             v
         })
-        .map(|v| v.into())
         .collect()
 }
 
